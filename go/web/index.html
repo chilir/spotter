@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Amenities Detection</title>
+</head>
+<body>
+    <h1>Amenities Detection Platform</h1>
+    <button onclick="deployModel()">Deploy Model</button>
+    <button onclick="deleteModel()">Delete Model</button>
+    <br><br>
+    <textarea id="imageUrls" rows="5" cols="50" placeholder="Enter image URLs, one per line"></textarea>
+    <br>
+    <button onclick="detectAmenities()">Detect Amenities</button>
+    <div id="status"></div>
+    <div id="results"></div>
+    <script>
+        function deployModel() {
+            fetch('/deploy', { method: 'POST' })
+                .then(response => response.text())
+                .then(data => document.getElementById('status').innerText = data);
+        }
+        function deleteModel() {
+            fetch('/delete', { method: 'POST' })
+                .then(response => response.text())
+                .then(data => document.getElementById('status').innerText = data);
+        }
+        function detectAmenities() {
+            const urls = document.getElementById('imageUrls').value.split('\n').filter(url => url.trim() !== '');
+            fetch(`http://${window.location.hostname}:30000/detect`, { // TODO: tmp
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_urls: urls })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('results').innerHTML = `
+                    <h3>${data.text_description}</h3>
+                    <pre>${JSON.stringify(data.images, null, 2)}</pre>
+                `;
+            })
+            .catch(error => document.getElementById('results').innerText = 'Error: ' + error);
+        }
+    </script>
+</body>
+</html>
