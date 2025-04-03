@@ -1,0 +1,26 @@
+[project]
+name = "spotter"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "pillow>=11.1.0",
+    "pydantic>=2.11.1",
+    "ray[serve]==2.44.1",
+    "tenacity>=9.1.2",
+    "timm>=1.0.15",
+    "torch>=2.6.0",
+    "transformers>=4.50.3",
+]
+
+[project.scripts]
+serve_spotter = "spotter.serve:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
