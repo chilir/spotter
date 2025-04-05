@@ -7,7 +7,7 @@ VM_IP=$(multipass list --format=csv | grep microk8s-vm | cut -d',' -f3)
 LOCAL_TAG="spotter-manager:test_debug"
 REGISTRY_TAG="${VM_IP}:32000/${LOCAL_TAG}" # microk8s registry target
 
-APP_BUILD_CONTEXT="apps/kuberay-manager"
+APP_BUILD_CONTEXT="apps/spotter-manager"
 DOCKERFILE_PATH="${APP_BUILD_CONTEXT}/Dockerfile"
 
 if [ ! -f "${DOCKERFILE_PATH}" ]; then

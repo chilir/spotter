@@ -1,3 +1,5 @@
+// apps/spotter-manager/cmd/spotter-manager/main.go
+
 package main
 
 import (

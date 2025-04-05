@@ -1,3 +1,5 @@
+# apps/spotter-manager/Dockerfile
+
 FROM golang:1.24 AS builder
 
 WORKDIR /tmp/build
