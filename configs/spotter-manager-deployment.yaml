@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spotter-manager
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kuberay-manager-sa
+  namespace: spotter-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuberay-manager-role
+rules:
+  - apiGroups: ["ray.io"]
+    resources: ["rayservices"]
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kuberay-manager-binding
+subjects:
+  - kind: ServiceAccount
+    name: kuberay-manager-sa
+    namespace: spotter-manager
+roleRef:
+  kind: ClusterRole
+  name: kuberay-manager-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kuberay-manager-deployment
+  namespace: spotter-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kuberay-manager
+  template:
+    metadata:
+      labels:
+        app: kuberay-manager
+    spec:
+      serviceAccountName: kuberay-manager-sa
+      containers:
+        - name: manager
+          image: localhost:32000/spotter-manager:test_debug
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m" # 0.1 CPU core
+            limits:
+              memory: "128Mi"
+              cpu: "250m" # 0.25 CPU core
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kuberay-manager-service
+  namespace: spotter-manager
+spec:
+  selector:
+    app: kuberay-manager
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort
