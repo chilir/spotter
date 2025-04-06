@@ -2,16 +2,20 @@
 
 import asyncio
 import base64
+import os
 from io import BytesIO
 
 import httpx
+import ray
 import torch
 from PIL import Image, ImageDraw
+from ray import serve
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 from transformers import (
-    RTDetrImageProcessor,
-    RTDetrV2ForObjectDetection,
-    RTDetrV2PreTrainedModel,
+    AutoImageProcessor,
+    AutoModelForObjectDetection,
+    BaseImageProcessor,
+    PreTrainedModel,
 )
 
 from spotter.schemas import (
@@ -58,9 +62,12 @@ AMENITIES_MAPPING = {
 }
 
 
-# @serve.deployment
+@serve.deployment
 class AmenitiesDetector:
-    def __init__(self, model: RTDetrV2PreTrainedModel, processor: RTDetrImageProcessor) -> None:
+    def __init__(self, model: PreTrainedModel, processor: BaseImageProcessor) -> None:
+        if not hasattr(processor, "post_process_object_detection"):
+            raise ValueError("Image processor must implement post_process_object_detection method")
+
         self.model = model
         self.processor = processor
         self.client = httpx.AsyncClient()
@@ -95,11 +102,11 @@ class AmenitiesDetector:
                 with torch.no_grad():
                     outputs = self.model(**inputs)
 
-                target_sizes = torch.tensor([image.size[::-1]], device=DEVICE, dtype=torch.int64)
+                target_sizes = torch.tensor([[image.size[1], image.size[0]]])
                 detections_raw: dict[str, torch.Tensor] = (
-                    self.processor.post_process_object_detection(
+                    self.processor.post_process_object_detection(  # type: ignore
                         outputs,
-                        target_sizes=target_sizes,  # type: ignore
+                        target_sizes=target_sizes,
                         threshold=0.5,
                     )[0]
                 )
@@ -193,41 +200,46 @@ class AmenitiesDetector:
 
 
 def main():
+    model_name = os.environ.get("MODEL_NAME")
+    if not model_name:
+        raise ValueError("MODEL_NAME environment variable not set.")
+
     # --- Ray Serve Deployment --- (Commented out for local testing)
-    # ray.init(address="auto")
-    # model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-101").to(DEVICE)
-    # processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-101")
-    # detector_app = AmenitiesDetector.bind(model, processor)
-    # serve.run(detector_app)
+    ray.init(address="auto")
+    model = AutoModelForObjectDetection.from_pretrained(model_name).to(DEVICE)  # type: ignore
+    processor = AutoImageProcessor.from_pretrained(model_name)
+    detector_app = AmenitiesDetector.bind(model, processor)
+    serve.run(detector_app)
     # ---------------------------
 
     # --- Local Testing --- (Active)
-    TEST_URL = "https://hospitable.com/wp-content/uploads/2022/01/Airbnb-pictures.jpg"  # Example: Cat and Remote
+    # TEST_URL = "https://hospitable.com/wp-content/uploads/2022/01/Airbnb-pictures.jpg"
 
-    print(f"Using device: {DEVICE}")
-    print("Loading model and processor...")
-    model = RTDetrV2ForObjectDetection.from_pretrained("PekingU/rtdetr_v2_r101vd").to(DEVICE)  # type: ignore
-    processor = RTDetrImageProcessor.from_pretrained("PekingU/rtdetr_v2_r101vd")
+    # print(f"Using device: {DEVICE}")
+    # print("Loading model and processor...")
+    # model = AutoModelForObjectDetection.from_pretrained(model_name).to(DEVICE)  # type: ignore
+    # processor = AutoImageProcessor.from_pretrained(model_name)
 
-    print("Initializing detector for local test...")
-    # Instantiate directly for local testing
-    detector = AmenitiesDetector(model, processor)
+    # print("Initializing detector for local test...")
+    # # Instantiate directly for local testing
+    # detector = AmenitiesDetector(model, processor)
 
-    print(f"Running detection for URL: {TEST_URL}")
-    # Create the Pydantic request model instance directly
-    # Pydantic will validate the URL format here too
-    try:
-        # The linter might complain here, but Pydantic v2 automatically
-        # converts the string URL to HttpUrl upon validation.
-        request_payload = DetectionRequest(image_urls=[TEST_URL])  # type: ignore
-    except Exception as e:
-        print(f"Error creating request payload: {e}")
-        return
+    # print(f"Running detection for URL: {TEST_URL}")
+    # # Create the Pydantic request model instance directly
+    # # Pydantic will validate the URL format here too
+    # try:
+    #     # The linter might complain here, but Pydantic v2 automatically
+    #     # converts the string URL to HttpUrl upon validation.
 
-    # Run the async __call__ method, passing the Pydantic model
-    result = asyncio.run(detector(request_payload))
+    #     request_payload = DetectionRequest(image_urls=[TEST_URL])  # type: ignore
+    # except Exception as e:
+    #     print(f"Error creating request payload: {e}")
+    #     return
 
-    print("\n--- Detection Result ---")
-    print(result)
-    print("------------------------")
-    # --------------------
+    # # Run the async __call__ method, passing the Pydantic model
+    # result = asyncio.run(detector(request_payload))
+
+    # print("\\n--- Detection Result ---")
+    # print(result)
+    # print("------------------------")
+    # # --------------------
