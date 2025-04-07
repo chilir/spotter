@@ -1,11 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Amenities Detection</title>
+    <style>
+        .input-group {
+            margin: 10px 0;
+        }
+
+        label {
+            display: inline-block;
+            width: 100px;
+        }
+    </style>
 </head>
+
 <body>
     <h1>Amenities Detection Platform</h1>
+
+    <div class="input-group">
+        <label for="dockerImage">Docker Image:</label>
+        <input type="text" id="dockerImage" placeholder="Enter Docker image URL" style="width: 300px;" />
+    </div>
+
     <button onclick="deployModel()">Deploy Model</button>
     <button onclick="deleteModel()">Delete Model</button>
     <br><br>
@@ -16,15 +34,24 @@
     <div id="results"></div>
     <script>
         function deployModel() {
-            fetch('/deploy', { method: 'POST' })
+            const dockerImage = document.getElementById('dockerImage').value;
+            if (!dockerImage) {
+                document.getElementById('status').innerText = 'Error: Docker image is required';
+                return;
+            }
+
+            fetch(`/deploy?image=${encodeURIComponent(dockerImage)}`, { method: 'POST' })
                 .then(response => response.text())
-                .then(data => document.getElementById('status').innerText = data);
+                .then(data => document.getElementById('status').innerText = data)
+                .catch(error => document.getElementById('status').innerText = 'Error: ' + error);
         }
+
         function deleteModel() {
             fetch('/delete', { method: 'POST' })
                 .then(response => response.text())
                 .then(data => document.getElementById('status').innerText = data);
         }
+
         function detectAmenities() {
             const urls = document.getElementById('imageUrls').value.split('\n').filter(url => url.trim() !== '');
             fetch(`http://${window.location.hostname}:30000/detect`, { // TODO: tmp
@@ -32,15 +59,16 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image_urls: urls })
             })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('results').innerHTML = `
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('results').innerHTML = `
                     <h3>${data.text_description}</h3>
                     <pre>${JSON.stringify(data.images, null, 2)}</pre>
                 `;
-            })
-            .catch(error => document.getElementById('results').innerText = 'Error: ' + error);
+                })
+                .catch(error => document.getElementById('results').innerText = 'Error: ' + error);
         }
     </script>
 </body>
+
 </html>

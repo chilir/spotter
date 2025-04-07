@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"text/template"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,11 +23,12 @@ var client dynamic.Interface
 func init() {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err)
+		// Consider more robust error handling or logging for production
+		log.Fatalf("Failed to get in-cluster config: %v", err)
 	}
 	client, err = dynamic.NewForConfig(config)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create dynamic client: %v", err)
 	}
 }
 
@@ -36,53 +36,45 @@ func ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "web/index.html")
 }
 
-// struct to hold parameters for the template
-type RayServiceParams struct {
-	ServiceName string
-	AppName     string // Optional, defaults to ServiceName in template
-	ImportPath  string
-	Image       string
-	Replicas    int
-	Namespace   string
-}
-
 func DeployHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if the request method is POST
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed. Use POST.", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Parse query parameters
 	queryParams := r.URL.Query()
-	params := RayServiceParams{
-		ServiceName: queryParams.Get("serviceName"),
-		AppName:     queryParams.Get("appName"), // Optional
-		ImportPath:  queryParams.Get("importPath"),
-		Image:       queryParams.Get("image"),
-		Namespace:   queryParams.Get("namespace"),
-	}
+	dockerImage := queryParams.Get("image")
 
-	// Validate required parameters
-	if params.ServiceName == "" || params.ImportPath == "" || params.Image == "" {
-		http.Error(w, "Missing required query parameters: serviceName, importPath, image", http.StatusBadRequest)
+	// Validate required parameter
+	if dockerImage == "" {
+		http.Error(w, "Missing required query parameter: image", http.StatusBadRequest)
 		return
 	}
 
-	// Parse replicas
-	replicasStr := queryParams.Get("replicas")
-	if replicasStr == "" {
-		replicasStr = "1" // Default to 1 replica if not specified
+	// Optional: Log the parameters being used
+	log.Printf("Attempting to deploy RayService with image: %s", dockerImage)
+
+	// Define parameters for template - only image is used
+	params := map[string]string{
+		"Image": dockerImage,
 	}
-	var err error
-	params.Replicas, err = strconv.Atoi(replicasStr)
-	if err != nil || params.Replicas < 0 {
-		http.Error(w, fmt.Sprintf("Invalid replicas value: %s. Must be a non-negative integer.", replicasStr), http.StatusBadRequest)
+
+	// path to the template relative to the running binary
+	templatePath := "configs/rayservice-template.yaml"
+
+	// Check if template file exists
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		log.Printf("Error: Template file not found at %s", templatePath)
+		http.Error(w, "Internal server error: Template file missing", http.StatusInternalServerError)
 		return
 	}
 
-	if params.Namespace == "" {
-		params.Namespace = "default"
-	}
-
-	// parse the template
-	templateBytes, err := os.ReadFile("go/configs/rayservice-template.yaml")
+	// Parse the template
+	templateBytes, err := os.ReadFile(templatePath)
 	if err != nil {
-		log.Printf("Error reading template file: %v", err)
+		log.Printf("Error reading template file '%s': %v", templatePath, err)
 		http.Error(w, "Internal server error reading template", http.StatusInternalServerError)
 		return
 	}
@@ -101,50 +93,72 @@ func DeployHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional: Log the generated manifest for debugging
+	// log.Printf("Generated RayService Manifest:\n%s", buf.String())
+
 	// Unmarshal YAML to unstructured object
 	obj := &unstructured.Unstructured{}
-	if err := yaml.Unmarshal(buf.Bytes(), &obj.Object); err != nil {
-		log.Printf("Error unmarshalling YAML: %v", err)
-		http.Error(w, "Internal server error unmarshalling YAML", http.StatusInternalServerError)
+	// Use Kubernetes YAML decoder which handles multi-document files (though template should be single)
+	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(buf.Bytes()), 4096)
+	if err := decoder.Decode(&obj); err != nil {
+		log.Printf("Error decoding generated YAML: %v\nYAML:\n%s", err, buf.String())
+		http.Error(w, "Internal server error decoding generated YAML", http.StatusInternalServerError)
 		return
 	}
 
-	// Create the resource using the dynamic client
+	// Check if decoding produced an empty object
+	if obj.Object == nil {
+		log.Printf("Error: Decoded object is nil. Check template output.\nYAML:\n%s", buf.String())
+		http.Error(w, "Internal server error: Failed to parse generated manifest", http.StatusInternalServerError)
+		return
+	}
+
+	// Define the GroupVersionResource for RayService
 	rayGVR := schema.GroupVersionResource{Group: "ray.io", Version: "v1alpha1", Resource: "rayservices"}
 
-	_, err = client.Resource(rayGVR).Namespace(params.Namespace).Create(r.Context(), obj, metav1.CreateOptions{})
+	// Create the resource using the dynamic client in the hardcoded namespace
+	serviceName := "spotter-svc"
+	namespace := "spotter-manager"
+
+	log.Printf("Creating RayService resource %s/%s...", namespace, serviceName)
+	createdObj, err := client.Resource(rayGVR).Namespace(namespace).Create(r.Context(), obj, metav1.CreateOptions{})
 	if err != nil {
-		log.Printf("Error creating RayService %s/%s: %v", params.Namespace, params.ServiceName, err)
-		http.Error(w, fmt.Sprintf("Failed to create RayService: %s", err.Error()), http.StatusInternalServerError)
+		log.Printf("Error creating RayService %s/%s: %v", namespace, serviceName, err)
+		// Provide more context in the error message if possible
+		http.Error(w, fmt.Sprintf("Failed to create RayService '%s' in namespace '%s': %s", serviceName, namespace, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("Successfully created RayService %s/%s (UID: %s)", namespace, serviceName, createdObj.GetUID())
 	w.WriteHeader(http.StatusCreated) // Use 201 Created for successful resource creation
-	w.Write([]byte(fmt.Sprintf("RayService '%s' created successfully in namespace '%s'", params.ServiceName, params.Namespace)))
+	fmt.Fprintf(w, "RayService '%s' created successfully in namespace '%s'", serviceName, namespace)
 }
 
 func DeleteHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters
-	queryParams := r.URL.Query()
-	serviceName := queryParams.Get("serviceName")
-	namespace := queryParams.Get("namespace")
-
-	// Validate required parameters
-	if serviceName == "" {
-		http.Error(w, "Missing required query parameter: serviceName", http.StatusBadRequest)
+	// Check if the request method is POST
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed. Use POST.", http.StatusMethodNotAllowed)
 		return
 	}
-	if namespace == "" {
-		namespace = "default"
-	}
+
+	serviceName := "spotter-svc"
+	namespace := "spotter-manager"
+
+	log.Printf("Attempting to delete RayService %s/%s", namespace, serviceName)
 
 	rayGVR := schema.GroupVersionResource{Group: "ray.io", Version: "v1alpha1", Resource: "rayservices"}
 
 	err := client.Resource(rayGVR).Namespace(namespace).Delete(r.Context(), serviceName, metav1.DeleteOptions{})
 	if err != nil {
+		// Check if the error is "not found" vs. other errors
+		// if errors.IsNotFound(err) { ... }
 		log.Printf("Error deleting RayService %s/%s: %v", namespace, serviceName, err)
-		http.Error(w, fmt.Sprintf("Failed to delete RayService: %s", err.Error()), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to delete RayService '%s' in namespace '%s': %s", serviceName, namespace, err.Error()), http.StatusInternalServerError)
 		return
 	}
-	w.Write([]byte(fmt.Sprintf("RayService '%s' deleted successfully from namespace '%s'", serviceName, namespace)))
+
+	log.Printf("Successfully initiated deletion for RayService %s/%s", namespace, serviceName)
+	fmt.Fprintf(w, "RayService '%s' deleted successfully from namespace '%s'", serviceName, namespace)
 }
+
+// Add other handlers (like List, GetStatus if needed)

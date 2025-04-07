@@ -3,7 +3,7 @@
 set -euo pipefail
 
 MANIFEST_FILE="configs/spotter-manager-deployment.yaml"
-NAMESPACE="spotter-manager"
+NAMESPACE="spotter"
 DEPLOYMENT_NAME="kuberay-manager-deployment"
 SERVICE_NAME="kuberay-manager-service"
 
