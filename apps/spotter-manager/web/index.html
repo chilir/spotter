@@ -54,19 +54,42 @@
 
         function detectAmenities() {
             const urls = document.getElementById('imageUrls').value.split('\n').filter(url => url.trim() !== '');
-            fetch(`http://${window.location.hostname}:30000/detect`, { // TODO: tmp
+            fetch(`/detect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image_urls: urls })
             })
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('results').innerHTML = `
-                    <h3>${data.text_description}</h3>
-                    <pre>${JSON.stringify(data.images, null, 2)}</pre>
-                `;
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
                 })
-                .catch(error => document.getElementById('results').innerText = 'Error: ' + error);
+                .then(data => {
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.innerHTML = ''; // Clear previous results
+                    if (data && data.images && Array.isArray(data.images)) {
+                        data.images.forEach(imageResult => {
+                            const imgElement = document.createElement('img');
+                            imgElement.src = `data:image/jpeg;base64,${imageResult.labeled_image_base64}`;
+                            imgElement.style.maxWidth = '500px'; // Optional: constrain image size
+                            imgElement.style.display = 'block';
+                            imgElement.style.marginBottom = '10px';
+
+                            const urlElement = document.createElement('p');
+                            urlElement.textContent = `Original URL: ${imageResult.url}`;
+
+                            resultsDiv.appendChild(urlElement);
+                            resultsDiv.appendChild(imgElement);
+                        });
+                    } else {
+                        resultsDiv.innerText = 'No images processed or invalid response format.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error detecting amenities:', error);
+                    document.getElementById('results').innerText = 'Error: ' + error;
+                });
         }
     </script>
 </body>

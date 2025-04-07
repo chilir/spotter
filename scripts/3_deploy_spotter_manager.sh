@@ -10,6 +10,10 @@ SERVICE_NAME="kuberay-manager-service"
 echo "--- Applying Kubernetes manifest: ${MANIFEST_FILE} ---"
 microk8s kubectl apply -f "${MANIFEST_FILE}"
 
+# Force a rollout restart to ensure the latest image is pulled even if the tag hasn't changed
+echo "--- Triggering deployment rollout restart: ${DEPLOYMENT_NAME} in namespace ${NAMESPACE} ---"
+microk8s kubectl rollout restart deployment/"${DEPLOYMENT_NAME}" -n "${NAMESPACE}"
+
 echo "--- Waiting for deployment rollout: ${DEPLOYMENT_NAME} in namespace ${NAMESPACE} ---"
 microk8s kubectl rollout status deployment/"${DEPLOYMENT_NAME}" -n "${NAMESPACE}" --timeout=120s
 

@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1alpha1
 kind: RayService
 metadata:
-  name: spotter-svc
+  name: spotter-ray-service
 spec:
   serveConfigV2: |
     applications:
@@ -19,14 +19,15 @@ spec:
         spec:
           containers:
             - name: ray-head
-              image: { { .Image } }
+              image: {{.Image}}
+              imagePullPolicy: Always
               resources:
                 requests:
-                  cpu: 2
-                  memory: 4Gi
+                  cpu: 1
+                  memory: 6Gi
                 limits:
                   cpu: 2
-                  memory: 4Gi
+                  memory: 8Gi
               ports:
                 - containerPort: 6379
                   name: gcs
@@ -46,11 +47,12 @@ spec:
           spec:
             containers:
               - name: ray-worker
-                image: { { .Image } }
+                image: {{.Image}}
+                imagePullPolicy: Always
                 resources:
                   requests:
-                    cpu: 4
-                    memory: 8Gi
+                    cpu: 1
+                    memory: 2Gi
                   limits:
-                    cpu: 4
-                    memory: 8Gi
+                    cpu: 1
+                    memory: 4Gi

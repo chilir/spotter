@@ -5,10 +5,12 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"text/template"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,6 +35,11 @@ func init() {
 }
 
 func ServeFrontend(w http.ResponseWriter, r *http.Request) {
+	// Add cache control headers to prevent caching of index.html
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
+	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
+	w.Header().Set("Expires", "0")                                         // Proxies.
+
 	http.ServeFile(w, r, "web/index.html")
 }
 
@@ -117,8 +124,8 @@ func DeployHandler(w http.ResponseWriter, r *http.Request) {
 	rayGVR := schema.GroupVersionResource{Group: "ray.io", Version: "v1alpha1", Resource: "rayservices"}
 
 	// Create the resource using the dynamic client in the hardcoded namespace
-	serviceName := "spotter-svc"
-	namespace := "spotter-manager"
+	serviceName := "spotter-ray-service"
+	namespace := "spotter"
 
 	log.Printf("Creating RayService resource %s/%s...", namespace, serviceName)
 	createdObj, err := client.Resource(rayGVR).Namespace(namespace).Create(r.Context(), obj, metav1.CreateOptions{})
@@ -141,8 +148,8 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serviceName := "spotter-svc"
-	namespace := "spotter-manager"
+	serviceName := "spotter-ray-service"
+	namespace := "spotter"
 
 	log.Printf("Attempting to delete RayService %s/%s", namespace, serviceName)
 
@@ -159,6 +166,77 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Successfully initiated deletion for RayService %s/%s", namespace, serviceName)
 	fmt.Fprintf(w, "RayService '%s' deleted successfully from namespace '%s'", serviceName, namespace)
+}
+
+// DetectProxyHandler forwards requests to the RayService endpoint for detection
+func DetectProxyHandler(w http.ResponseWriter, r *http.Request) {
+	serviceName := "spotter-ray-service"
+	namespace := "spotter"
+
+	// Only accept POST method
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed. Use POST.", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// KubeRay creates a service for Ray Serve with this naming pattern
+	// The route_prefix in the template is set to /detect
+	// Use the head service name convention, which exposes port 8000 for serve
+	rayServiceURL := fmt.Sprintf("http://%s-head-svc.%s.svc.cluster.local:8000/detect",
+		serviceName, namespace)
+
+	// Read the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		http.Error(w, "Error reading request", http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	// Create a new request to the Ray service
+	proxyReq, err := http.NewRequestWithContext(r.Context(), "POST", rayServiceURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		log.Printf("Error creating proxy request: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Copy headers from the original request
+	proxyReq.Header = r.Header.Clone()
+
+	// Make the request to the Ray service
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		log.Printf("Error forwarding request to Ray service: %v", err)
+		http.Error(w, fmt.Sprintf("Error communicating with detection service: %v", err),
+			http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading response from Ray service: %v", err)
+		http.Error(w, "Error reading response from detection service",
+			http.StatusInternalServerError)
+		return
+	}
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Set the status code and write the response body
+	w.WriteHeader(resp.StatusCode)
+	w.Write(respBody)
+
+	log.Printf("Successfully proxied detection request to RayService %s", rayServiceURL)
 }
 
 // Add other handlers (like List, GetStatus if needed)
