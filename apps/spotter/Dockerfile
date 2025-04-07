@@ -33,5 +33,3 @@ COPY --from=builder /app/src /app/src
 COPY --from=builder ${HF_HOME} ${HF_HOME}
 
 ENV PATH="/app/.venv/bin:$PATH"
-
-ENTRYPOINT ["serve_spotter"]

@@ -1,69 +1,56 @@
 apiVersion: ray.io/v1alpha1
 kind: RayService
 metadata:
-  # Placeholder for the name of the RayService instance
-  name: { { .ServiceName } }
+  name: spotter-svc
 spec:
-  # Note: serveConfigV2 is a multi-line string in YAML
   serveConfigV2: |
     applications:
-      - name: {{ .AppName | default .ServiceName }} # Defaults to ServiceName if AppName is not provided
-        import_path: {{ .ImportPath }}
-        route_prefix: /detect # Hardcoded route prefix
-  # RayCluster configuration details
+      - name: spotter-serve
+        import_path: spotter.serve:deployment
+        route_prefix: /detect
+        deployments:
+          - name: AmenitiesDetector
   rayClusterConfig:
+    rayVersion: 2.44.1
     headGroupSpec:
-      # rayStartParams can be added here if needed, e.g.,
-      # rayStartParams:
-      #   dashboard-host: '0.0.0.0'
+      rayStartParams:
+        dashboard-host: 0.0.0.0
       template:
         spec:
           containers:
             - name: ray-head
               image: { { .Image } }
-              # Add resource requests/limits if needed
-              # resources:
-              #   requests:
-              #     cpu: "1"
-              #     memory: "2Gi"
-              #   limits:
-              #     cpu: "1"
-              #     memory: "2Gi"
-              # Ports might be needed if overriding defaults or for specific networking
-              # ports:
-              # - containerPort: 6379 # GCS
-              #   name: gcs
-              # - containerPort: 8265 # Dashboard
-              #   name: dashboard
-              # - containerPort: 10001 # Client
-              #   name: client
-              # - containerPort: 8000 # Serve
-              #   name: serve
+              resources:
+                requests:
+                  cpu: 2
+                  memory: 4Gi
+                limits:
+                  cpu: 2
+                  memory: 4Gi
+              ports:
+                - containerPort: 6379
+                  name: gcs
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 10001
+                  name: client
+                - containerPort: 8000
+                  name: serve
     workerGroupSpecs:
-      - groupName: default-worker # It's good practice to name worker groups
-        replicas: { { .Replicas } }
-        # minReplicas/maxReplicas for autoscaling if needed
-        # minReplicas: {{ .MinReplicas | default .Replicas }}
-        # maxReplicas: {{ .MaxReplicas | default .Replicas }}
-        # rayStartParams for workers if needed
-        # rayStartParams: {}
+      - groupName: spotter-worker
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 5
+        rayStartParams: {}
         template:
           spec:
             containers:
               - name: ray-worker
                 image: { { .Image } }
-                # Add resource requests/limits if needed
-                # resources:
-                #   requests:
-                #     cpu: "1"
-                #     memory: "2Gi"
-                #   limits:
-                #     cpu: "1"
-                #     memory: "2Gi"
-  # Optional: Configure the Kubernetes service created for the Ray Serve endpoint
-  # serveService:
-  #   type: NodePort # Or LoadBalancer, ClusterIP
-  #   ports:
-  #     - name: serve
-  #       port: 8000 # Internal port Ray Serve listens on
-  #       # nodePort: {{ .NodePort }} # Only if type is NodePort and you need a specific one
+                resources:
+                  requests:
+                    cpu: 4
+                    memory: 8Gi
+                  limits:
+                    cpu: 4
+                    memory: 8Gi

@@ -1,3 +1,5 @@
+# apps/spotter/src/spotter/schemas.py
+
 from pydantic import BaseModel, HttpUrl
 
 

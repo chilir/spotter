@@ -16,7 +16,6 @@ dependencies = [
 ]
 
 [project.scripts]
-serve_spotter = "spotter.serve:main"
 spotter_download = "spotter.download:download"
 
 [build-system]

@@ -34,6 +34,7 @@
             nixpkgs-fmt
             go
           ];
+          MODEL_NAME = "PekingU/rtdetr_v2_r101vd";
         };
       });
     };

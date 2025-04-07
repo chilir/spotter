@@ -1,4 +1,4 @@
-# python/src/serve.py
+# apps/spotter/src/spotter/serve.py
 
 import asyncio
 import base64
@@ -6,10 +6,10 @@ import os
 from io import BytesIO
 
 import httpx
-import ray
 import torch
 from PIL import Image, ImageDraw
 from ray import serve
+from starlette.requests import Request
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 from transformers import (
     AutoImageProcessor,
@@ -26,9 +26,6 @@ from spotter.schemas import (
     DetectionSuccessResult,
     ImageResult,
 )
-
-DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-
 
 # Mapping of COCO labels to amenities
 AMENITIES_MAPPING = {
@@ -61,6 +58,8 @@ AMENITIES_MAPPING = {
     "car": "parking",
 }
 
+device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
 
 @serve.deployment
 class AmenitiesDetector:
@@ -81,13 +80,12 @@ class AmenitiesDetector:
         """Processes a single image URL, handling detection, drawing, and encoding."""
 
         try:
+            image_bytes = None
             retries = AsyncRetrying(
                 stop=stop_after_attempt(3),
                 wait=wait_exponential(multiplier=1, min=4, max=10),
                 reraise=True,
             )
-
-            image_bytes = None
             async for attempt in retries:
                 with attempt:
                     image_bytes = await self._fetch_image_bytes(url)
@@ -97,8 +95,7 @@ class AmenitiesDetector:
 
             with Image.open(BytesIO(image_bytes)) as img_raw:
                 image = img_raw.convert("RGB")
-
-                inputs = self.processor(images=image, return_tensors="pt").to(DEVICE)
+                inputs = self.processor(images=image, return_tensors="pt").to(device)
                 with torch.no_grad():
                     outputs = self.model(**inputs)
 
@@ -159,18 +156,18 @@ class AmenitiesDetector:
             error_msg = f"Processing Error: {e}\n{tb_str}"
             return DetectionErrorResult(url=url, error=error_msg)
 
-    async def __call__(self, payload: DetectionRequest) -> DetectionResponse:
+    async def __call__(self, raw_payload: Request) -> DetectionResponse:
         """
         Process a batch of images to detect amenities.
 
         Parameters
         ----------
-        payload : AmenitiesRequest
+        payload : Request
             Request payload containing list of image URLs to process.
 
         Returns
         -------
-        AmenitiesResponse
+        DetectionResponse
             Response containing amenities description and per-image results.
             Includes detected amenities, bounding boxes, and labeled images.
 
@@ -179,7 +176,7 @@ class AmenitiesDetector:
         Exception
             If there is an error processing the request.
         """
-
+        payload = DetectionRequest.model_validate(await raw_payload.json())
         tasks = [self._process_single_image(str(image_url)) for image_url in payload.image_urls]
         gathered_results = await asyncio.gather(*tasks)
 
@@ -199,47 +196,42 @@ class AmenitiesDetector:
         return DetectionResponse(amenities_description=amenities_description, images=final_results)
 
 
-def main():
-    model_name = os.environ.get("MODEL_NAME")
-    if not model_name:
-        raise ValueError("MODEL_NAME environment variable not set.")
+model_name = os.environ.get("MODEL_NAME")
+if not model_name:
+    raise ValueError("MODEL_NAME environment variable not set.")
 
-    # --- Ray Serve Deployment --- (Commented out for local testing)
-    ray.init(address="auto")
-    model = AutoModelForObjectDetection.from_pretrained(model_name).to(DEVICE)  # type: ignore
-    processor = AutoImageProcessor.from_pretrained(model_name)
-    detector_app = AmenitiesDetector.bind(model, processor)
-    serve.run(detector_app)
-    # ---------------------------
+model = AutoModelForObjectDetection.from_pretrained(model_name).to(device)  # type: ignore
+processor = AutoImageProcessor.from_pretrained(model_name)
+deployment = AmenitiesDetector.bind(model, processor)
 
-    # --- Local Testing --- (Active)
-    # TEST_URL = "https://hospitable.com/wp-content/uploads/2022/01/Airbnb-pictures.jpg"
+# --- Local Testing ---
+# TEST_URL = "https://hospitable.com/wp-content/uploads/2022/01/Airbnb-pictures.jpg"
 
-    # print(f"Using device: {DEVICE}")
-    # print("Loading model and processor...")
-    # model = AutoModelForObjectDetection.from_pretrained(model_name).to(DEVICE)  # type: ignore
-    # processor = AutoImageProcessor.from_pretrained(model_name)
+# print(f"Using device: {DEVICE}")
+# print("Loading model and processor...")
+# model = AutoModelForObjectDetection.from_pretrained(model_name).to(DEVICE)  # type: ignore
+# processor = AutoImageProcessor.from_pretrained(model_name)
 
-    # print("Initializing detector for local test...")
-    # # Instantiate directly for local testing
-    # detector = AmenitiesDetector(model, processor)
+# print("Initializing detector for local test...")
+# # Instantiate directly for local testing
+# detector = AmenitiesDetector(model, processor)
 
-    # print(f"Running detection for URL: {TEST_URL}")
-    # # Create the Pydantic request model instance directly
-    # # Pydantic will validate the URL format here too
-    # try:
-    #     # The linter might complain here, but Pydantic v2 automatically
-    #     # converts the string URL to HttpUrl upon validation.
+# print(f"Running detection for URL: {TEST_URL}")
+# # Create the Pydantic request model instance directly
+# # Pydantic will validate the URL format here too
+# try:
+#     # The linter might complain here, but Pydantic v2 automatically
+#     # converts the string URL to HttpUrl upon validation.
 
-    #     request_payload = DetectionRequest(image_urls=[TEST_URL])  # type: ignore
-    # except Exception as e:
-    #     print(f"Error creating request payload: {e}")
-    #     return
+#     request_payload = DetectionRequest(image_urls=[TEST_URL])  # type: ignore
+# except Exception as e:
+#     print(f"Error creating request payload: {e}")
+#     return
 
-    # # Run the async __call__ method, passing the Pydantic model
-    # result = asyncio.run(detector(request_payload))
+# # Run the async __call__ method, passing the Pydantic model
+# result = asyncio.run(detector(request_payload))
 
-    # print("\\n--- Detection Result ---")
-    # print(result)
-    # print("------------------------")
-    # # --------------------
+# print("\\n--- Detection Result ---")
+# print(result)
+# print("------------------------")
+# # --------------------
