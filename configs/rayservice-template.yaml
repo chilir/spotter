@@ -15,18 +15,19 @@ spec:
     headGroupSpec:
       rayStartParams:
         dashboard-host: 0.0.0.0
+        num-cpus: "0"
       template:
         spec:
           containers:
             - name: ray-head
-              image: {{.Image}}
+              image: {{.DockerImage}}
               imagePullPolicy: Always
               resources:
                 requests:
-                  cpu: 1
-                  memory: 6Gi
+                  cpu: 500m
+                  memory: 4Gi
                 limits:
-                  cpu: 2
+                  cpu: 2000m
                   memory: 8Gi
               ports:
                 - containerPort: 6379
@@ -41,18 +42,18 @@ spec:
       - groupName: spotter-worker
         replicas: 1
         minReplicas: 1
-        maxReplicas: 5
+        maxReplicas: 2
         rayStartParams: {}
         template:
           spec:
             containers:
               - name: ray-worker
-                image: {{.Image}}
+                image: {{.DockerImage}}
                 imagePullPolicy: Always
                 resources:
                   requests:
-                    cpu: 1
-                    memory: 2Gi
-                  limits:
-                    cpu: 1
+                    cpu: 500m
                     memory: 4Gi
+                  limits:
+                    cpu: 2000m
+                    memory: 8Gi

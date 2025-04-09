@@ -40,7 +40,7 @@
                 return;
             }
 
-            fetch(`/deploy?image=${encodeURIComponent(dockerImage)}`, { method: 'POST' })
+            fetch(`/deploy?dockerimage=${encodeURIComponent(dockerImage)}`, { method: 'POST' })
                 .then(response => response.text())
                 .then(data => document.getElementById('status').innerText = data)
                 .catch(error => document.getElementById('status').innerText = 'Error: ' + error);
@@ -72,7 +72,7 @@
                         data.images.forEach(imageResult => {
                             const imgElement = document.createElement('img');
                             imgElement.src = `data:image/jpeg;base64,${imageResult.labeled_image_base64}`;
-                            imgElement.style.maxWidth = '500px'; // Optional: constrain image size
+                            imgElement.style.maxWidth = '500px';
                             imgElement.style.display = 'block';
                             imgElement.style.marginBottom = '10px';
 

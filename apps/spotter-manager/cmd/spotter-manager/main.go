@@ -13,10 +13,16 @@ import (
 )
 
 func main() {
+	// init  k8s client
+	k8sClient, err := setupKubernetesClient()
+	if err != nil {
+		log.Fatalf("Kubernetes client initialization failed: %v", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ServeFrontend)
-	mux.HandleFunc("/deploy", DeployHandler)
-	mux.HandleFunc("/delete", DeleteHandler)
+	mux.HandleFunc("/deploy", makeDeployHandler(k8sClient))
+	mux.HandleFunc("/delete", makeDeleteHandler(k8sClient))
 	mux.HandleFunc("/detect", DetectProxyHandler)
 
 	server := &http.Server{
