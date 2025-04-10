@@ -1,6 +1,6 @@
-// apps/spotter-manager/cmd/spotter-manager/handlers.go
+// apps/spotter-manager/internal/handlers.go
 
-package main
+package handlers
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"text/template"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -25,22 +26,22 @@ const (
 	rayServiceNamespace = "spotter"
 )
 
-// setupKubernetesClient initializes and returns a Kubernetes dynamic client.
-func setupKubernetesClient() (dynamic.Interface, error) {
+// SetupKubernetesClient initializes and returns a Kubernetes dynamic client.
+func SetupKubernetesClient() (dynamic.Interface, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
+		return nil, fmt.Errorf("Failed to get in-cluster config: %w", err)
 	}
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+		return nil, fmt.Errorf("Failed to create dynamic client: %w", err)
 	}
 	log.Println("Kubernetes dynamic client initialized successfully.")
 	return client, nil
 }
 
 func ServeFrontend(w http.ResponseWriter, r *http.Request) {
-	// Add cache control headers to prevent caching of index.html
+	// prevent caching
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1
 	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0
 	w.Header().Set("Expires", "0")
@@ -48,9 +49,9 @@ func ServeFrontend(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "web/index.html") // relative path to binary in container
 }
 
-// makeDeployHandler creates an HTTP handler for deploying the RayService.
+// MakeDeployHandler creates an HTTP handler for deploying the RayService.
 // It captures the dynamic Kubernetes client via closure.
-func makeDeployHandler(client dynamic.Interface) http.HandlerFunc {
+func MakeDeployHandler(client dynamic.Interface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Only POST requests are allowed.", http.StatusMethodNotAllowed)
@@ -60,7 +61,7 @@ func makeDeployHandler(client dynamic.Interface) http.HandlerFunc {
 		queryParams := r.URL.Query()
 		dockerImage := queryParams.Get("dockerimage")
 		if dockerImage == "" {
-			http.Error(w, "Missing required query parameter: image", http.StatusBadRequest)
+			http.Error(w, "Missing required query parameter: dockerimage", http.StatusBadRequest)
 			return
 		}
 		log.Printf("Attempting to deploy RayService with Docker image: %s", dockerImage)
@@ -208,9 +209,9 @@ func makeDeployHandler(client dynamic.Interface) http.HandlerFunc {
 	}
 }
 
-// makeDeleteHandler creates an HTTP handler for deleting the RayService.
+// MakeDeleteHandler creates an HTTP handler for deleting the RayService.
 // It captures the dynamic Kubernetes client via closure.
-func makeDeleteHandler(client dynamic.Interface) http.HandlerFunc {
+func MakeDeleteHandler(client dynamic.Interface) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Only POST requests are allowed.", http.StatusMethodNotAllowed)
@@ -223,47 +224,83 @@ func makeDeleteHandler(client dynamic.Interface) http.HandlerFunc {
 
 		err := client.Resource(rayGVR).Namespace(rayServiceNamespace).Delete(r.Context(), rayServiceName, metav1.DeleteOptions{})
 		if err != nil {
-			log.Printf("Error deleting RayService %s/%s: %v", rayServiceNamespace, rayServiceName, err)
-			http.Error(
-				w,
-				fmt.Sprintf(
-					"Internal server error: failed to delete RayService '%s' in namespace '%s': %s",
-					rayServiceName,
-					rayServiceNamespace,
-					err.Error(),
-				),
-				http.StatusInternalServerError,
-			)
-			return
+			// Check if the error is 'NotFound'
+			if errors.IsNotFound(err) {
+				log.Printf("RayService %s/%s not found, considering deletion successful (idempotent).", rayServiceNamespace, rayServiceName)
+				// Still return success as the desired state (not existing) is achieved
+			} else {
+				// Handle other errors as internal server errors
+				log.Printf("Error deleting RayService %s/%s: %v", rayServiceNamespace, rayServiceName, err)
+				http.Error(
+					w,
+					fmt.Sprintf(
+						"Internal server error: failed to delete RayService '%s' in namespace '%s': %s",
+						rayServiceName,
+						rayServiceNamespace,
+						err.Error(),
+					),
+					http.StatusInternalServerError,
+				)
+				return // Important: return after sending error
+			}
 		}
 
-		log.Printf(
-			"Successfully initiated deletion for RayService %s/%s",
-			rayServiceNamespace,
-			rayServiceName,
-		)
-		fmt.Fprintf(
-			w,
-			"RayService '%s' deleted successfully from namespace '%s'",
-			rayServiceName, rayServiceNamespace)
+		if err == nil {
+			log.Printf(
+				"Successfully initiated deletion for RayService %s/%s",
+				rayServiceNamespace,
+				rayServiceName,
+			)
+		}
+		// Send success response whether deletion happened or resource was already gone
+		w.WriteHeader(http.StatusOK) // Ensure status is OK for idempotency
+
+		// Customize message based on whether the resource existed
+		var responseMsg string
+		if err != nil && errors.IsNotFound(err) {
+			// It was a NotFound error
+			responseMsg = fmt.Sprintf("RayService '%s' in namespace '%s' did not exist.", rayServiceName, rayServiceNamespace)
+		} else {
+			// Either err was nil (successful delete) or it was some other non-NotFound error handled above
+			// We only reach here for err == nil in practice because other errors return earlier.
+			responseMsg = fmt.Sprintf("RayService '%s' deleted successfully from namespace '%s'", rayServiceName, rayServiceNamespace)
+		}
+		fmt.Fprint(w, responseMsg) // Use Fprint as we don't need formatting here
 	}
 }
 
-// DetectProxyHandler forwards requests to the RayService endpoint for detection
-func DetectProxyHandler(w http.ResponseWriter, r *http.Request) {
+// ProxyHandler holds dependencies for the detect proxy
+type ProxyHandler struct {
+	TargetURL string
+	Client    *http.Client // Allow injecting a client for testing/timeouts
+}
+
+// NewProxyHandler creates a new ProxyHandler
+// If targetURLOverride is empty, it constructs the default RayService URL.
+func NewProxyHandler(targetURLOverride string) *ProxyHandler {
+	targetURL := targetURLOverride
+	if targetURL == "" {
+		// Construct the default URL if no override is provided
+		targetURL = fmt.Sprintf(
+			"http://%s-head-svc.%s.svc.cluster.local:8000/detect",
+			rayServiceName,
+			rayServiceNamespace,
+		)
+	}
+	return &ProxyHandler{
+		TargetURL: targetURL,
+		Client: &http.Client{
+			Timeout: 60 * time.Second, // Keep the default timeout
+		},
+	}
+}
+
+// ServeHTTP forwards requests to the configured TargetURL
+func (h *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST requests are allowed.", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// KubeRay creates a service for Ray Serve with this naming pattern
-	// The route_prefix in the template is set to /detect
-	// Use the head service name convention, which exposes port 8000 for serve
-	rayServiceURL := fmt.Sprintf(
-		"http://%s-head-svc.%s.svc.cluster.local:8000/detect",
-		rayServiceName,
-		rayServiceNamespace,
-	)
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -271,29 +308,32 @@ func DetectProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error reading request", http.StatusBadRequest)
 		return
 	}
-	r.Body.Close()
+	r.Body.Close() // Close the original request body
 
+	// Use h.TargetURL instead of the hardcoded one
 	proxyReq, err := http.NewRequestWithContext(
 		r.Context(),
 		"POST",
-		rayServiceURL,
-		bytes.NewReader(bodyBytes),
+		h.TargetURL,
+		bytes.NewReader(bodyBytes), // Create a new reader for the proxy request
 	)
 	if err != nil {
 		log.Printf("Error creating proxy request: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "Internal server error creating proxy request", http.StatusInternalServerError)
 		return
 	}
+	// Copy headers from the original request
 	proxyReq.Header = r.Header.Clone()
 
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	resp, err := httpClient.Do(proxyReq)
+	// Use the client from the handler struct
+	resp, err := h.Client.Do(proxyReq)
 	if err != nil {
-		log.Printf("Error forwarding request to Ray service: %v", err)
+		log.Printf("Error forwarding request to target %s: %v", h.TargetURL, err)
 		http.Error(
 			w,
 			fmt.Sprintf(
-				"Bad gateway: failed to communicate with detection service: %v",
+				"Bad gateway: failed to communicate with detection service at %s: %v",
+				h.TargetURL,
 				err,
 			),
 			http.StatusBadGateway,
@@ -302,28 +342,40 @@ func DetectProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Error reading response from Ray service: %v", err)
-		http.Error(
-			w,
-			fmt.Sprintf(
-				"Internal server error: failed to read response from detection service: %v",
-				err,
-			),
-			http.StatusInternalServerError,
-		)
-		return
-	}
-
+	// Copy headers from the backend response to the original response writer
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
 	}
 
+	// Copy the status code from the backend response
 	w.WriteHeader(resp.StatusCode)
-	w.Write(respBody)
 
-	log.Printf("Successfully proxied detection request to RayService %s", rayServiceURL)
+	// Copy the body from the backend response
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("Error copying response body from target %s: %v", h.TargetURL, err)
+		// Don't write another error header if one has already been written
+		if !headerWritten(w) {
+			http.Error(w, "Internal server error reading backend response", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	log.Printf("Successfully proxied detection request to %s", h.TargetURL)
+}
+
+// Helper function to check if the response header has been written
+// This prevents writing multiple headers, which causes warnings.
+func headerWritten(w http.ResponseWriter) bool {
+	// Accessing the underlying ResponseWriter to check the status code.
+	// This is a common pattern but relies on the implementation detail.
+	// A more robust way might involve custom ResponseWriter wrappers.
+	if ww, ok := w.(interface{ Status() int }); ok {
+		return ww.Status() != 0
+	}
+	// Fallback check: Check if headers have been written via WriteHeader call implicitly
+	// This is less reliable as Write() also writes headers.
+	// A simple heuristic: check if a common header exists.
+	return w.Header().Get("Date") != ""
 }

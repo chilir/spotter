@@ -10,20 +10,22 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"spotter-manager/internal/handlers"
 )
 
 func main() {
 	// init  k8s client
-	k8sClient, err := setupKubernetesClient()
+	k8sClient, err := handlers.SetupKubernetesClient()
 	if err != nil {
 		log.Fatalf("Kubernetes client initialization failed: %v", err)
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", ServeFrontend)
-	mux.HandleFunc("/deploy", makeDeployHandler(k8sClient))
-	mux.HandleFunc("/delete", makeDeleteHandler(k8sClient))
-	mux.HandleFunc("/detect", DetectProxyHandler)
+	mux.HandleFunc("/", handlers.ServeFrontend)
+	mux.HandleFunc("/deploy", handlers.MakeDeployHandler(k8sClient))
+	mux.HandleFunc("/delete", handlers.MakeDeleteHandler(k8sClient))
+	mux.HandleFunc("/detect", handlers.DetectProxyHandler)
 
 	server := &http.Server{
 		Addr:    ":8080",
