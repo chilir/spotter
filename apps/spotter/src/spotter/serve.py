@@ -203,35 +203,3 @@ if not model_name:
 model = AutoModelForObjectDetection.from_pretrained(model_name).to(device)  # type: ignore
 processor = AutoImageProcessor.from_pretrained(model_name)
 deployment = AmenitiesDetector.bind(model, processor)
-
-# --- Local Testing ---
-# TEST_URL = "https://hospitable.com/wp-content/uploads/2022/01/Airbnb-pictures.jpg"
-
-# print(f"Using device: {DEVICE}")
-# print("Loading model and processor...")
-# model = AutoModelForObjectDetection.from_pretrained(model_name).to(DEVICE)  # type: ignore
-# processor = AutoImageProcessor.from_pretrained(model_name)
-
-# print("Initializing detector for local test...")
-# # Instantiate directly for local testing
-# detector = AmenitiesDetector(model, processor)
-
-# print(f"Running detection for URL: {TEST_URL}")
-# # Create the Pydantic request model instance directly
-# # Pydantic will validate the URL format here too
-# try:
-#     # The linter might complain here, but Pydantic v2 automatically
-#     # converts the string URL to HttpUrl upon validation.
-
-#     request_payload = DetectionRequest(image_urls=[TEST_URL])  # type: ignore
-# except Exception as e:
-#     print(f"Error creating request payload: {e}")
-#     return
-
-# # Run the async __call__ method, passing the Pydantic model
-# result = asyncio.run(detector(request_payload))
-
-# print("\\n--- Detection Result ---")
-# print(result)
-# print("------------------------")
-# # --------------------

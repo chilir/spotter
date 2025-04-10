@@ -19,12 +19,12 @@ def download() -> None:
 
     _logger.info(f"--- Preloading: {model_name} ---")
 
-    _logger.info("Downloading image processor...")
-    AutoImageProcessor.from_pretrained(model_name)
-    _logger.info("Image processor download complete.")
-
     _logger.info("Downloading model...")
     AutoModelForObjectDetection.from_pretrained(model_name)
     _logger.info("Model download complete.")
+
+    _logger.info("Downloading image processor...")
+    AutoImageProcessor.from_pretrained(model_name)
+    _logger.info("Image processor download complete.")
 
     _logger.info(f"--- Preloading complete for: {model_name} ---")
