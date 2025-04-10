@@ -350,7 +350,11 @@ spec:
 }
 
 func TestMakeDeleteHandler(t *testing.T) {
-	rayGVR := schema.GroupVersionResource{Group: "ray.io", Version: "v1alpha1", Resource: "rayservices"}
+	rayGVR := schema.GroupVersionResource{
+		Group:    "ray.io",
+		Version:  "v1alpha1",
+		Resource: "rayservices",
+	}
 
 	tests := []struct {
 		name               string
@@ -369,7 +373,11 @@ func TestMakeDeleteHandler(t *testing.T) {
 				return client
 			},
 			expectedStatusCode: http.StatusOK,
-			expectedBody:       fmt.Sprintf("RayService '%s' in namespace '%s' did not exist.", rayServiceName, rayServiceNamespace),
+			expectedBody: fmt.Sprintf(
+				"RayService '%s' in namespace '%s' did not exist, no deletion occurred",
+				rayServiceName,
+				rayServiceNamespace,
+			),
 			checkK8sActions: func(t *testing.T, actions []kubetesting.Action) {
 				if len(actions) != 1 {
 					t.Fatalf("Expected 1 k8s action, got %d", len(actions))
@@ -380,8 +388,13 @@ func TestMakeDeleteHandler(t *testing.T) {
 				}
 				deleteAction := action.(kubetesting.DeleteAction)
 				if deleteAction.GetName() != rayServiceName || deleteAction.GetNamespace() != rayServiceNamespace {
-					t.Errorf("Expected delete for %s/%s, got %s/%s",
-						rayServiceNamespace, rayServiceName, deleteAction.GetNamespace(), deleteAction.GetName())
+					t.Errorf(
+						"Expected delete for %s/%s, got %s/%s",
+						rayServiceNamespace,
+						rayServiceName,
+						deleteAction.GetNamespace(),
+						deleteAction.GetName(),
+					)
 				}
 			},
 		},
@@ -390,13 +403,21 @@ func TestMakeDeleteHandler(t *testing.T) {
 			method: http.MethodPost,
 			setupFakeClient: func() *dynamicfake.FakeDynamicClient {
 				client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
-				client.PrependReactor("delete", "rayservices", func(action kubetesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, fmt.Errorf("simulated delete error")
-				})
+				client.PrependReactor(
+					"delete",
+					"rayservices",
+					func(action kubetesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, fmt.Errorf("simulated delete error")
+					},
+				)
 				return client
 			},
 			expectedStatusCode: http.StatusInternalServerError,
-			expectedBody:       fmt.Sprintf("Internal server error: failed to delete RayService '%s' in namespace '%s': simulated delete error", rayServiceName, rayServiceNamespace),
+			expectedBody: fmt.Sprintf(
+				"Internal server error: failed to delete RayService '%s' in namespace '%s': simulated delete error",
+				rayServiceName,
+				rayServiceNamespace,
+			),
 			checkK8sActions: func(t *testing.T, actions []kubetesting.Action) {
 				if len(actions) != 1 {
 					t.Fatalf("Expected 1 k8s action, got %d", len(actions))
@@ -405,9 +426,11 @@ func TestMakeDeleteHandler(t *testing.T) {
 			},
 		},
 		{
-			name:               "Error - Wrong Method",
-			method:             http.MethodGet,
-			setupFakeClient:    func() *dynamicfake.FakeDynamicClient { return dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()) },
+			name:   "Error - Wrong Method",
+			method: http.MethodGet,
+			setupFakeClient: func() *dynamicfake.FakeDynamicClient {
+				return dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+			},
 			expectedStatusCode: http.StatusMethodNotAllowed,
 			expectedBody:       "Only POST requests are allowed.",
 		},
@@ -427,7 +450,12 @@ func TestMakeDeleteHandler(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			if rr.Code != tt.expectedStatusCode {
-				t.Errorf("Expected status code %d, got %d. Body: %s", tt.expectedStatusCode, rr.Code, rr.Body.String())
+				t.Errorf(
+					"Expected status code %d, got %d. Body: %s",
+					tt.expectedStatusCode,
+					rr.Code,
+					rr.Body.String(),
+				)
 			}
 			if body := strings.TrimSpace(rr.Body.String()); body != tt.expectedBody {
 				t.Errorf("Expected body '%s', got '%s'", tt.expectedBody, body)
@@ -440,7 +468,7 @@ func TestMakeDeleteHandler(t *testing.T) {
 	}
 }
 
-func TestDetectProxyHandler(t *testing.T) {
+func TestProxyHandler(t *testing.T) {
 	tests := []struct {
 		name               string
 		method             string
@@ -491,7 +519,7 @@ func TestDetectProxyHandler(t *testing.T) {
 				panic("Backend should not be reachable for 'Backend Down' test")
 			},
 			expectedStatusCode: http.StatusBadGateway,
-			// Expect a prefix because the error includes OS-specific connection refused details
+			// Expect a prefix
 			expectedBody: "Bad gateway: failed to communicate with detection service at",
 		},
 		{
@@ -513,21 +541,19 @@ func TestDetectProxyHandler(t *testing.T) {
 			var targetURL string
 
 			if tt.name != "Error - Backend Down" {
-				// Start the backend server for tests that need it
+				// mock backend server
 				backendServer = httptest.NewServer(tt.backendHandler)
 				defer backendServer.Close()
-				targetURL = backendServer.URL // Use the test server's URL
+				targetURL = backendServer.URL
 			} else {
-				// For the "Backend Down" test, use a non-existent URL
-				// (or we could use the real server's URL but ensure it's stopped)
-				targetURL = "http://localhost:9999/nonexistent" // Ensure this port is unlikely to be used
+				//  "Backend Down" non-existent URL
+				targetURL = "http://localhost:9999/nonexistent"
 			}
 
-			// Create the handler using the new constructor, passing the target URL
 			handler := NewProxyHandler(targetURL)
 
 			reqBody := bytes.NewBufferString(tt.requestBody)
-			req, err := http.NewRequest(tt.method, "/detect", reqBody) // The request path to the *proxy* doesn't matter here
+			req, err := http.NewRequest(tt.method, "/detect", reqBody)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -536,15 +562,19 @@ func TestDetectProxyHandler(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			// Use the ServeHTTP method of the ProxyHandler instance
 			handler.ServeHTTP(rr, req)
 
 			if rr.Code != tt.expectedStatusCode {
-				t.Errorf("Expected status code %d, got %d. Body: %s", tt.expectedStatusCode, rr.Code, rr.Body.String())
+				t.Errorf(
+					"Expected status code %d, got %d. Body: %s",
+					tt.expectedStatusCode,
+					rr.Code,
+					rr.Body.String(),
+				)
 			}
 
 			body := strings.TrimSpace(rr.Body.String())
-			// For Bad Gateway, the error message includes specifics about the connection refusal, so we check prefix
+			// check prefix
 			if tt.expectedStatusCode == http.StatusBadGateway {
 				if !strings.HasPrefix(body, tt.expectedBody) {
 					t.Errorf("Expected body prefix '%s', got '%s'", tt.expectedBody, body)

@@ -25,7 +25,8 @@ func main() {
 	mux.HandleFunc("/", handlers.ServeFrontend)
 	mux.HandleFunc("/deploy", handlers.MakeDeployHandler(k8sClient))
 	mux.HandleFunc("/delete", handlers.MakeDeleteHandler(k8sClient))
-	mux.HandleFunc("/detect", handlers.DetectProxyHandler)
+	proxyHandler := handlers.NewProxyHandler("")
+	mux.Handle("/detect", proxyHandler) // Use mux.Handle for http.Handler types
 
 	server := &http.Server{
 		Addr:    ":8080",
