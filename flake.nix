@@ -33,8 +33,18 @@
             wget
             nixpkgs-fmt
             go
+            python312
+            uv
           ];
-          MODEL_NAME = "PekingU/rtdetr_v2_r101vd";
+          MODEL_NAME = "PekingU/rtdetr_v2_r101vd"; # change as needed
+
+          # Prevent uv from managing Python downloads
+          UV_PYTHON_DOWNLOADS = "never";
+          # Force uv to use nixpkgs Python interpreter
+          UV_PYTHON = pkgs.python312.interpreter;
+          shellHook = ''
+            unset PYTHONPATH
+          '';
         };
       });
     };
