@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# assumes microk8s is already installed and started
 microk8s enable dns registry
 microk8s helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 microk8s helm repo update
