@@ -51,7 +51,7 @@ spec:
       serviceAccountName: kuberay-manager-sa
       containers:
         - name: manager
-          image: localhost:32000/spotter-manager:test_debug
+          image: localhost:32000/spotter-manager:latest
           imagePullPolicy: Always
           resources:
             requests:

@@ -4,7 +4,7 @@ set -euo pipefail
 
 VM_IP=$(multipass list --format=csv | grep microk8s-vm | cut -d',' -f3)
 
-LOCAL_TAG="spotter:test_debug"
+LOCAL_TAG="spotter:latest"
 REGISTRY_TAG="${VM_IP}:32000/${LOCAL_TAG}" # microk8s registry target
 
 DOCKERFILE_PATH="apps/spotter/Dockerfile"
