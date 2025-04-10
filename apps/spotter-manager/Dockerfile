@@ -6,7 +6,7 @@ WORKDIR /tmp/build
 COPY apps/spotter-manager .
 COPY configs/rayservice-template.yaml ./configs/rayservice-template.yaml
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -o spotter-manager cmd/spotter-manager/*.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o spotter-manager cmd/spotter-manager/main.go
 
 FROM scratch AS runner
 WORKDIR /app
