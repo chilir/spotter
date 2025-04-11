@@ -35,7 +35,6 @@
             go
             python312
             uv
-            gcc
           ];
           MODEL_NAME = "PekingU/rtdetr_v2_r101vd"; # change as needed
 
