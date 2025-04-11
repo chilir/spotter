@@ -35,6 +35,7 @@
             go
             python312
             uv
+            stdenv.cc.cc.lib
           ];
           MODEL_NAME = "PekingU/rtdetr_v2_r101vd"; # change as needed
 
