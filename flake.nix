@@ -35,14 +35,23 @@
             go
             python312
             uv
-            stdenv.cc.cc.lib
+            gcc
           ];
           MODEL_NAME = "PekingU/rtdetr_v2_r101vd"; # change as needed
 
-          # Prevent uv from managing Python downloads
-          UV_PYTHON_DOWNLOADS = "never";
-          # Force uv to use nixpkgs Python interpreter
-          UV_PYTHON = pkgs.python312.interpreter;
+          env = {
+            # Prevent uv from managing Python downloads
+            UV_PYTHON_DOWNLOADS = "never";
+            # Force uv to use nixpkgs Python interpreter
+            UV_PYTHON = pkgs.python312.interpreter;
+          } // nixpkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+            # Set LD_LIBRARY_PATH for Linux to help find shared libraries
+            LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath [
+              pkgs.gcc.cc.lib
+              pkgs.stdenv.cc.cc.lib
+            ];
+          };
+
           shellHook = ''
             unset PYTHONPATH
             export UV_PROJECT=./apps/spotter
