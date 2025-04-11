@@ -1,0 +1,30 @@
+name: Pull request
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: nixbuild/nix-quick-install-action@v30
+
+      - name: Check Nix flake
+        uses: DeterminateSystems/flake-checker-action@v9
+        with:
+          fail-mode: true
+
+      - name: Run Go tests
+        run: |
+          nix develop --command bash -c '
+            go test ./apps/spotter-manager/...
+          '

@@ -7,7 +7,7 @@ run all tests from repo root
 go unit tests:
 
 ```bash
-go test ./apps/spotter-manager/internal/handlers
+go test ./apps/spotter-manager/...
 ```
 
 python tests:
