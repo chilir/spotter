@@ -32,6 +32,6 @@ jobs:
       - name: Run Python tests
         run: |
           nix develop --command bash -c '
-            uv --all-extras
+            uv sync --all-extras
             uv run pytest
           '
