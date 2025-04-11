@@ -44,6 +44,7 @@
           UV_PYTHON = pkgs.python312.interpreter;
           shellHook = ''
             unset PYTHONPATH
+            export UV_PROJECT=./apps/spotter
           '';
         };
       });

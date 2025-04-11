@@ -28,3 +28,10 @@ jobs:
           nix develop --command bash -c '
             go test ./apps/spotter-manager/...
           '
+
+      - name: Run Python tests
+        run: |
+          nix develop --command bash -c '
+            uv --all-extras
+            uv run pytest
+          '
