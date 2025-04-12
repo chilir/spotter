@@ -28,8 +28,7 @@ jobs:
           fail-mode: true
 
       - name: Set up Python environment
-        run: |
-          nix develop --command bash -c 'uv sync --all-extras'
+        run: nix develop --command bash -c 'uv sync --all-extras'
 
       - name: Ruff lint
         run: |
@@ -65,11 +64,8 @@ jobs:
         with:
           fail-mode: true
 
-      - name: Set up Nix flake
-        run: nix develop
+      - name: Set up Go environment
+        run: nix develop --command bash -c 'go mod download'
 
       - name: Go test
-        run: |
-          nix develop --command bash -c '
-            go test ${SPOTTER_MANAGER_DIR}/...
-          '
+        run: nix develop --command bash -c 'go test ${SPOTTER_MANAGER_DIR}/...'
