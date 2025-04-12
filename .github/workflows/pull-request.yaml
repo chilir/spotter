@@ -29,8 +29,7 @@ jobs:
 
       - name: Set up Python environment
         run: |
-          nix develop --command bash -c '
-            uv sync --all-extras
+          nix develop --command bash -c 'uv sync --all-extras'
 
       - name: Ruff lint
         run: |
@@ -49,7 +48,8 @@ jobs:
       - name: Pytest
         run: |
           nix develop --command bash -c '
-            uv run pytest
+            uv run pytest --version
+            uv run pytest ${SPOTTER_DIR}
           '
 
   go-lint-format-test:
