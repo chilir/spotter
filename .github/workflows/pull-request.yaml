@@ -34,7 +34,7 @@ jobs:
         run: |
           nix develop --command bash -c '
             ruff --version
-            ruff --config ${SPOTTER_DIR}/pyproject.toml check --diff --target-version py312 ${SPOTTER_DIR}
+            ruff --config ${SPOTTER_DIR}/pyproject.toml check --show-fixes --target-version py312 ${SPOTTER_DIR}
           '
 
       - name: Ruff format
@@ -48,7 +48,7 @@ jobs:
         run: |
           nix develop --command bash -c '
             uv run pytest --version
-            uv run pytest ${SPOTTER_DIR}
+            uv run pytest -v --color=yes ${SPOTTER_DIR}
           '
 
   go-lint-format-test:
