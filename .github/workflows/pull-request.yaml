@@ -67,5 +67,11 @@ jobs:
       - name: Set up Go environment
         run: nix develop --command bash -c 'go mod download'
 
+      - name: Go lint
+        run: |
+          nix develop --command bash -c '
+            golangci-lint run --fast-only ${SPOTTER_MANAGER_DIR}/...
+          '
+
       - name: Go test
         run: nix develop --command bash -c 'go test ${SPOTTER_MANAGER_DIR}/...'
