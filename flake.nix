@@ -33,8 +33,10 @@
             wget
             nixpkgs-fmt
             go
+            golangci-lint
             python312
             uv
+            ruff
           ];
           MODEL_NAME = "PekingU/rtdetr_v2_r101vd"; # change as needed
 

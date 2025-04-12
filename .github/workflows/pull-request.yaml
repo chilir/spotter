@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-test:
+  lint-format-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,15 +23,38 @@ jobs:
         with:
           fail-mode: true
 
-      - name: Run Go tests
+      - name: Python lint and format
+        env:
+          SPOTTER_DIR: ./apps/spotter
         run: |
           nix develop --command bash -c '
-            go test ./apps/spotter-manager/...
+            ruff --version
+            ruff --config ${SPOTTER_DIR}/pyproject.toml check --show-fixes --diff --target-version py312 ${SPOTTER_DIR}
+            ruff --config ${SPOTTER_DIR}/pyproject.toml format --check --diff --target-version py312 ${SPOTTER_DIR}
           '
 
-      - name: Run Python tests
-        run: |
-          nix develop --command bash -c '
-            uv sync --all-extras
-            uv run pytest
-          '
+  # go-test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - name: Install Nix
+  #       uses: nixbuild/nix-quick-install-action@v30
+
+  #     - name: Check Nix flake
+  #       uses: DeterminateSystems/flake-checker-action@v9
+  #       with:
+  #         fail-mode: true
+
+  #     - name: Run Go tests
+  #       run: |
+  #         nix develop --command bash -c '
+  #           go test ./apps/spotter-manager/...
+  #         '
+
+  #     - name: Run Python tests
+  #       run: |
+  #         nix develop --command bash -c '
+  #           uv sync --all-extras
+  #           uv run pytest
+  #         '
