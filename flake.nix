@@ -34,6 +34,7 @@
             nixpkgs-fmt
             go
             golangci-lint
+            gotools
             python312
             uv
             ruff

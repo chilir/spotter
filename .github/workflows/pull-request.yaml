@@ -30,21 +30,21 @@ jobs:
       - name: Set up Python environment
         run: nix develop --command bash -c 'uv sync --all-extras'
 
-      - name: Ruff lint
+      - name: Lint Python code with ruff
         run: |
           nix develop --command bash -c '
             ruff --version
             ruff --config ${SPOTTER_DIR}/pyproject.toml check --show-fixes --target-version py312 ${SPOTTER_DIR}
           '
 
-      - name: Ruff format
+      - name: Format Python code with ruff
         run: |
           nix develop --command bash -c '
             ruff --version
             ruff --config ${SPOTTER_DIR}/pyproject.toml format --check --diff --target-version py312 ${SPOTTER_DIR}
           '
 
-      - name: Pytest
+      - name: Run Python tests with pytest
         run: |
           nix develop --command bash -c '
             uv run pytest --version
@@ -67,11 +67,14 @@ jobs:
       - name: Set up Go environment
         run: nix develop --command bash -c 'go mod download'
 
-      - name: Go lint
+      - name: Lint Go code with golangci-lint
         run: |
           nix develop --command bash -c '
             golangci-lint run --fast-only ${SPOTTER_MANAGER_DIR}/...
           '
 
-      - name: Go test
+      - name: Format Go code with goimports
+        run: goimports -d -l -e ${SPOTTER_MANAGER_DIR}/**/*.go
+
+      - name: Run Go tests
         run: nix develop --command bash -c 'go test ${SPOTTER_MANAGER_DIR}/...'
