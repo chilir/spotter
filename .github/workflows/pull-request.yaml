@@ -9,13 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  SPOTTER_DIR: ./apps/spotter
-  SPOTTER_MANAGER_DIR: ./apps/spotter-manager
-
 jobs:
   python-lint-format-test:
     runs-on: ubuntu-latest
+    env:
+      SPOTTER_DIR: ./apps/spotter
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +51,8 @@ jobs:
 
   go-lint-format-test:
     runs-on: ubuntu-latest
+    env:
+      SPOTTER_MANAGER_DIR: ./apps/spotter-manager
     steps:
       - uses: actions/checkout@v4
 
@@ -70,11 +70,12 @@ jobs:
       - name: Lint Go code with golangci-lint
         run: |
           nix develop --command bash -c '
+            golangci-lint --version
             golangci-lint run --fast-only ${SPOTTER_MANAGER_DIR}/...
           '
 
       - name: Format Go code with goimports
-        run: goimports -d -l -e ${SPOTTER_MANAGER_DIR}/**/*.go
+        run: nix develop --command bash -c 'goimports -d -l -e ${SPOTTER_MANAGER_DIR}/**/*.go'
 
       - name: Run Go tests
         run: nix develop --command bash -c 'go test ${SPOTTER_MANAGER_DIR}/...'
