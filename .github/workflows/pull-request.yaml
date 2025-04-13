@@ -10,7 +10,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  python-lint-format-test:
+  python-lint-format:
+    runs-on: ubuntu-latest
+    env:
+      SPOTTER_DIR: ./apps/spotter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "--config ${{ env.SPOTTER_DIR }}/pyproject.toml check --show-fixes --target-version py312"
+
+      - run: ruff --config ${SPOTTER_DIR}/pyproject.toml format --check --diff --target-version py312 ${SPOTTER_DIR}
+
+  python-test:
+    needs: python-lint-format
     runs-on: ubuntu-latest
     env:
       SPOTTER_DIR: ./apps/spotter
@@ -28,19 +42,19 @@ jobs:
       - name: Set up Python environment
         run: nix develop --command bash -c 'uv sync --all-extras'
 
-      - name: Lint Python code with ruff
-        run: |
-          nix develop --command bash -c '
-            ruff --version
-            ruff --config ${SPOTTER_DIR}/pyproject.toml check --show-fixes --target-version py312 ${SPOTTER_DIR}
-          '
+      # - name: Lint Python code with ruff
+      #   run: |
+      #     nix develop --command bash -c '
+      #       ruff --version
+      #       ruff --config ${SPOTTER_DIR}/pyproject.toml check --show-fixes --target-version py312 ${SPOTTER_DIR}
+      #     '
 
-      - name: Format Python code with ruff
-        run: |
-          nix develop --command bash -c '
-            ruff --version
-            ruff --config ${SPOTTER_DIR}/pyproject.toml format --check --diff --target-version py312 ${SPOTTER_DIR}
-          '
+      # - name: Format Python code with ruff
+      #   run: |
+      #     nix develop --command bash -c '
+      #       ruff --version
+      #       ruff --config ${SPOTTER_DIR}/pyproject.toml format --check --diff --target-version py312 ${SPOTTER_DIR}
+      #     '
 
       - name: Run Python tests with pytest
         run: |
