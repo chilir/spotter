@@ -50,7 +50,24 @@ jobs:
             uv run pytest -v --color=yes ${SPOTTER_DIR}
           '
 
-  go-lint-format-test:
+  go-lint:
+    runs-on: ubuntu-latest
+    env:
+      SPOTTER_MANAGER_DIR: ./apps/spotter-manager
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Go code with golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          only-new-issues: true
+          working-directory: ${{ env.SPOTTER_MANAGER_DIR }}
+          skip-cache: true
+          skip-save-cache: true
+          args: "--fast-only"
+
+  go-format-test:
+    needs: go-lint
     runs-on: ubuntu-latest
     env:
       SPOTTER_MANAGER_DIR: ./apps/spotter-manager
@@ -67,15 +84,6 @@ jobs:
 
       - name: Set up Go environment
         run: nix develop --command bash -c 'go mod download'
-
-      - name: Lint Go code with golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          only-new-issues: true
-          working-directory: ${{ env.SPOTTER_MANAGER_DIR }}
-          skip-cache: true
-          skip-save-cache: true
-          args: "--fast-only"
 
         # run: |
         #   nix develop --command bash -c '
