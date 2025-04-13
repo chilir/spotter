@@ -20,12 +20,12 @@ jobs:
       - name: Lint Python code with ruff
         uses: astral-sh/ruff-action@v3
         with:
-          args: "--config ${{ env.SPOTTER_DIR }}/pyproject.toml check --show-fixes --target-version py312 ${{ env.SPOTTER_DIR }}"
+          args: "--config ${{ env.SPOTTER_DIR }}/pyproject.toml check --show-fixes --target-version py312 ${SPOTTER_DIR}"
 
       - name: Format Python code with ruff
         uses: astral-sh/ruff-action@v3
         with:
-          args: "--config ${{ env.SPOTTER_DIR }}/pyproject.toml format --check --diff --target-version py312 ${{ env.SPOTTER_DIR }}"
+          args: "--config ${{ env.SPOTTER_DIR }}/pyproject.toml format --check --diff --target-version py312 ${SPOTTER_DIR}"
 
   python-test:
     needs: python-lint-format
