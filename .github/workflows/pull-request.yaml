@@ -4,6 +4,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -68,11 +69,19 @@ jobs:
         run: nix develop --command bash -c 'go mod download'
 
       - name: Lint Go code with golangci-lint
-        run: |
-          nix develop --command bash -c '
-            golangci-lint --version
-            golangci-lint run --fast-only ${SPOTTER_MANAGER_DIR}/...
-          '
+        uses: golangci/golangci-lint-action@v7
+        with:
+          only-new-issues: true
+          working-directory: ${SPOTTER_MANAGER_DIR}
+          skip-cache: true
+          skip-save-cache: true
+          args: "--fast-only"
+
+        # run: |
+        #   nix develop --command bash -c '
+        #     golangci-lint --version
+        #     golangci-lint run --fast-only ${SPOTTER_MANAGER_DIR}/...
+        #   '
 
       - name: Format Go code with goimports
         run: |
