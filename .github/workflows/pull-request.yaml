@@ -75,7 +75,11 @@ jobs:
           '
 
       - name: Format Go code with goimports
-        run: nix develop --command bash -c 'goimports -d -l -e ${SPOTTER_MANAGER_DIR}/**/*.go'
+        run: |
+          nix develop --command bash -c '
+            shopt -s globstar
+            goimports -d -l -e ${SPOTTER_MANAGER_DIR}/**/*.go
+          '
 
       - name: Run Go tests
         run: nix develop --command bash -c 'go test ${SPOTTER_MANAGER_DIR}/...'
