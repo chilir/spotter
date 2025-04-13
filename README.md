@@ -10,25 +10,26 @@ The project consists of two main components:
 UI to manage the ML service deployment on Kubernetes.
 * `spotter`: A Python-based ML service using Ray Serve for detecting amenities in images.
 
-`spotter-manager` handles deploying the `spotter` application as a KubeRay `RayService` on
+`spotter-manager` handles deploying the `spotter` application as a KubeRay RayService on
 Kubernetes and proxies detection requests to the active service.
 
 The deployment process involves `spotter-manager` generating a `RayService` manifest by populating a
-template (`configs/rayservice-template.yaml`). Once `spotter-manager` applies this manifest, KubeRay
-uses it to manage the underlying Ray cluster, automatically handling autoscaling within the resource
-limits defined in the manifest.
+template ([`configs/rayservice-template.yaml`](configs/rayservice-template.yaml)). Once
+`spotter-manager` applies this manifest, KubeRay uses it to manage the underlying Ray cluster,
+automatically handling autoscaling within the resource limits defined in the manifest.
 
 ## Features
 
-* Manages deployment and deletion of the `spotter` as a KubeRay RayService via HTTP API and web UI.
-* Utilizes configurable object detection models from HuggingFace Hub
+* Manages deployment and deletion of  `spotter` as a KubeRay RayService via HTTP API and web UI
+* Utilizes configurable object detection models from HuggingFace
 * Provides endpoints for service management (`/deploy`, `/delete`) and amenity detection (`/detect`)
-* Includes a simple web frontend for deploying/deleting the service and submitting image URLs for inference
+* Includes a simple web frontend for deploying/deleting the service and submitting image URLs for
+  inference
 
 ## Prerequisites
 
 * Docker
-* A local Kubernetes cluster - (e.g. MicroK8s)
+* A local Kubernetes cluster (e.g. MicroK8s)
 
 ## Quickstart
 
@@ -67,11 +68,14 @@ Access the `spotter-manager` service (e.g., `http://<vm_ip>:8080`). The UI allow
 
 ## Configuration
 
-* `spotter-manager` service:
-  * Uses [`configs/rayservice-template.yaml`](configs/rayservice-template.yaml) to generate the RayService manifest for `spotter`
+* `spotter-manager`:
+  * Uses [`configs/rayservice-template.yaml`](configs/rayservice-template.yaml) to generate the
+    RayService manifest for `spotter`
   * Deployed using [`configs/spotter-manager-deployment.yaml`](configs/spotter-manager-deployment.yaml)
-* **`spotter` service:**
-  * `MODEL_NAME` environment variable (or Docker build argument) specifies the Hugging Face object detection model. Default: [`PekingU/rtdetr_v2_r101vd`](https://huggingface.co/PekingU/rtdetr_v2_r101vd).
+* `spotter`:
+  * `MODEL_NAME` environment variable (or Docker build argument) specifies the HuggingFace object
+    detection model. Default:
+    [`PekingU/rtdetr_v2_r101vd`](https://huggingface.co/PekingU/rtdetr_v2_r101vd).
 
 ## License
 
