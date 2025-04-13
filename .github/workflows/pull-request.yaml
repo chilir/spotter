@@ -72,7 +72,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           only-new-issues: true
-          working-directory: ${SPOTTER_MANAGER_DIR}
+          working-directory: ${{ env.SPOTTER_MANAGER_DIR }}
           skip-cache: true
           skip-save-cache: true
           args: "--fast-only"
